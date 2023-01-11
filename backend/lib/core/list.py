@@ -52,9 +52,65 @@ class Task:
         self.task_starts_at = task_starts_at
         self.task_ends_at = task_ends_at
 
+    @staticmethod
+    def getTask(task_id, conn):
+        cur = conn.cursor()
+        cur.execute("SELECT * FROM Task WHERE task_id = %s", (task_id,))
+        [task_id, list_id, user_id, task_title, task_state, task_created_at, task_starts_at, task_ends_at] = cur.fetchone()
+        task = Task(task_id, list_id, user_id, task_title, task_state, task_created_at, task_starts_at, task_ends_at)
+        return task
+
+    @staticmethod
+    def getTasks(list_id, conn):
+        cur = conn.cursor()
+        cur.execute("SELECT * FROM Task WHERE list_id = %s", (list_id,))
+        tasks = [Task(task_id, list_id, user_id, task_title, task_state, task_created_at, task_starts_at, task_ends_at) for task_id,list_id,user_id,task_title,task_state,task_created_at,task_starts_at,task_ends_at in cur.fetchall()]
+        return tasks
+
+    @staticmethod
+    def createTask(list_id, user_id, task_title, task_state, task_created_at, task_starts_at, task_ends_at, conn):
+        cur = conn.cursor()
+        cur.execute("INSERT INTO Task (list_id, user_id, task_title, task_state, task_created_at, task_starts_at, task_ends_at) VALUES (%s, %s, %s, %s, %s, %s, %s)", (list_id, user_id, task_title, task_state, task_created_at, task_starts_at, task_ends_at))
+        conn.commit()
+        cur.execute("SELECT * FROM Task WHERE list_id = %s AND user_id = %s AND task_title = %s AND task_state = %s AND task_created_at = %s AND task_starts_at = %s AND task_ends_at = %s", (list_id, user_id, task_title, task_state, task_created_at, task_starts_at, task_ends_at))
+        [task_id, list_id, user_id, task_title, task_state, task_created_at, task_starts_at, task_ends_at] = cur.fetchone()
+        task = Task(task_id, list_id, user_id, task_title, task_state, task_created_at, task_starts_at, task_ends_at)
+        return task
+
+    @staticmethod
+    def removeTask(task_id, conn):
+        cur = conn.cursor()
+        cur.execute("DELETE FROM Task WHERE task_id = %s", (task_id,))
+        conn.commit()
+    
+    def updateTaskTitle(self, task_title, conn):
+        cur = conn.cursor()
+        cur.execute("UPDATE Task SET task_title = %s WHERE task_id = %s", (task_title, self.task_id))
+        conn.commit()
+        self.task_title = task_title
+
+    def updateTaskState(self, task_state, conn):
+        cur = conn.cursor()
+        cur.execute("UPDATE Task SET task_state = %s WHERE task_id = %s", (task_state, self.task_id))
+        conn.commit()
+        self.task_state = task_state
+
+    def updateTaskStartsAt(self, task_starts_at, conn):
+        cur = conn.cursor()
+        cur.execute("UPDATE Task SET task_starts_at = %s WHERE task_id = %s", (task_starts_at, self.task_id))
+        conn.commit()
+        self.task_starts_at = task_starts_at
+
+    def updateTaskEndsAt(self, task_ends_at, conn):
+        cur = conn.cursor()
+        cur.execute("UPDATE Task SET task_ends_at = %s WHERE task_id = %s", (task_ends_at, self.task_id))
+        conn.commit()
+        self.task_ends_at = task_ends_at
+
 class Comment:
-    def __init__(self, comment_id, task_id, created_at, title, body):
+    def __init__(self, comment_id, user_id, task_id, created_at, title, body):
         self.comment_id = comment_id
+        self.user_id = user_id
         self.task_id = task_id
         self.created_at = created_at
         self.title = title
@@ -91,9 +147,14 @@ class Comment:
         cur.execute("DELETE FROM Comment WHERE comment_id = %s", (comment_id,))
         conn.commit()
 
-    def updateComment(self, title, body, conn):
+    def updateCommentTitle(self, title, conn):
         cur = conn.cursor()
-        cur.execute("UPDATE Comment SET title = %s, body = %s WHERE comment_id = %s", (title, body, self.comment_id))
+        cur.execute("UPDATE Comment SET title = %s WHERE comment_id = %s", (title, self.comment_id))
         conn.commit()
         self.title = title
+
+    def updateCommentBody(self, body, conn):
+        cur = conn.cursor()
+        cur.execute("UPDATE Comment SET body = %s WHERE comment_id = %s", (body, self.comment_id))
+        conn.commit()
         self.body = body
