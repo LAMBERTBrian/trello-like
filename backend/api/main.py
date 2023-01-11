@@ -1,6 +1,9 @@
 import sqlite3
 from flask import Flask
 
+from backend.api.lib.core.list import Task
+
+
 app = Flask(__name__)
 
 @app.route('/user/<username>')
@@ -43,6 +46,24 @@ def get_user_membership(username):
 
     # return the result
     return str(data)
+
+# api route that change the state of a task
+@app.route('/task/<task_id>/set-state/<state>')
+def set_task_state(task_id, state):
+    # connect to "data.db" database with sqlite
+    conn = sqlite3.connect('data.db')
+
+    task = Task.getTask(task_id, conn)
+
+    task.updateTaskState(state, conn)
+
+    # close the connection
+    conn.close()
+
+    # return the result
+    return "success"
+
+
 
 # api route that get all members of a team with their role and name
 @app.route('/team/<team_name>/members')
