@@ -1,10 +1,32 @@
 import sqlite3
-from flask import Flask
+from flask import Flask, jsonify
 
-from backend.api.lib.core.list import Task
-
+from lib.core.list import Task
+from lib.core.team import Team
 
 app = Flask(__name__)
+
+# get team
+
+@app.route('/team/<team_id>')
+def get_team_by_id(team_id):
+    conn = sqlite3.connect('data.db')
+
+    team = Team.getTeam(team_id, conn)
+
+    team_json = team.toJson()    
+
+    return jsonify(team_json)
+
+# get lists
+# get tasks
+# get list
+# get task
+# get members
+# get member
+# get comments
+# get comment
+
 
 @app.route('/user/<username>')
 def get_user_email(username):
