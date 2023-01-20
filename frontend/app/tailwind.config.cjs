@@ -4,12 +4,12 @@ module.exports = {
 	theme: {
 		extend: {
 			colors: {
-				primary: "#1E90FF",
-				secondary: "#FF6347",
-				danger: "#DC143C",
-				dark: "#343A40",
-				light: "#F8F9FA",
-				white: "#FFFFFF",
+				"primary-bg": "#10122A",
+				"secondary-bg": "#161936",
+				"primary-text": "#FFFFFF",
+				"secondary-text": "#404155",
+				"gradient-1": "#455EB5",
+				"gradient-2": "#673FD7",
 			},
 		},
 	},
