@@ -1,8 +1,8 @@
 import sqlite3
 from flask import Flask, jsonify
 
-from lib.core.list import Task
-from lib.core.team import Team
+from lib.list import Task
+from lib.team import Team
 
 app = Flask(__name__)
 
