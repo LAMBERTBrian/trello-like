@@ -107,7 +107,9 @@ def auth_signup():
     if user != None:
         return jsonify({"validated": False, "message": "User already exists", "data": None})
 
-    user = User.createUser(user_name, user_email, user_password, conn)
+    user_color = "#{:06x}".format(random.randint(0, 0xFFFFFF))
+    
+    user = User.createUser(user_name, user_email, user_password, user_color, conn)
 
     [token, _] = Session.createSession(user.user_id, conn)
 
