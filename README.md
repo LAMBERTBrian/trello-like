@@ -40,3 +40,5 @@ Le but de Tasky est de manager des tâches dans une équipe.
 On peut créer un compte et se connecter sur l'Application avec un email et un mot de passe.
 
 On peut ensuite accéder au Dashboard et ajouter des taches dans des listes que l'on peut nommer comme l'on souhaite. Il est possible d'assigner des tâches à des membres du sites. De supprimer des tâches, de déplacer des tâches etc...
+
+Voici la maquette de l'app https://www.figma.com/file/0Ytx9RQZAXJEwhZr7052kh/Tasky?node-id=0%3A1&t=HEQDwLrgbsphhDat-1
