@@ -1,190 +1,328 @@
 import sqlite3
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
+from flask_cors import CORS
 
-from lib.list import Task
-from lib.team import Team
+from lib.list import Task, List
+from lib.auth import Session
+from lib.user import User
 
+import random
+
+# create a Flask app with cors enabled
 app = Flask(__name__)
-
-# get team
-
-@app.route('/team/<team_id>')
-def get_team_by_id(team_id):
-    conn = sqlite3.connect('data.db')
-
-    team = Team.getTeam(team_id, conn)
-
-    team_json = team.toJson()    
-
-    return jsonify(team_json)
-
-# get lists
-# get tasks
-# get list
-# get task
-# get members
-# get member
-# get comments
-# get comment
+CORS(app)
 
 
-@app.route('/user/<username>')
-def get_user_email(username):
+@app.route('/auth/validate', methods=['POST'])
+def auth_validate():
+
+    session_token = request.json['session_token']
+
     # connect to "data.db" database with sqlite
     conn = sqlite3.connect('data.db')
 
-    # create a cursor object
-    c = conn.cursor()
-
-    # execute a query
-    c.execute("SELECT * FROM User WHERE user_name = ?", (username,))
-
-    # fetch the result
-    user = c.fetchone()
+    [validated, message, data] = Session.verifyToken(session_token, conn)
 
     # close the connection
     conn.close()
 
-    # return the result
-    return str(user)
+    return jsonify({
+        "validated": validated,
+        "message": message,
+        "data": {
+            "user": {
+                "user_id": data.user_id,
+                "user_name": data.user_name,
+                "user_email": data.user_email,
+                "user_color": data.user_color
+            } if data != None else None
+        }
+    })
 
-# api route that get user's membership status
-@app.route('/user/<username>/team')
-def get_user_membership(username):
-    # connect to "data.db" database with sqlite
+
+@app.route('/auth/login', methods=['POST'])
+def auth_login():
+    user_email = request.json['email']
+    user_password = request.json['password']
+
     conn = sqlite3.connect('data.db')
 
-    # create a cursor object
     c = conn.cursor()
 
-    # execute a query that gets all the teams of the user by finding all the foreign keys in the Member table
-    c.execute("SELECT team_name FROM Team WHERE team_id = (SELECT team_id FROM Member WHERE user_id = (SELECT user_id FROM User WHERE user_name = ?))", (str(username),))
+    user = User.getUserByEmail(user_email, conn)
 
-    # fetch the result
-    data = c.fetchall()
+    if user == None:
+        return jsonify({
+            "validated": False,
+            "message": "User not found",
+            "data": None})
 
-    # close the connection
+    if user.user_password != user_password:
+        return jsonify({"validated": False, "message": "Wrong password", "data": None})
+
+    [token, _] = Session.createSession(user.user_id, conn)
+
     conn.close()
 
-    # return the result
-    return str(data)
+    # add session token to cookies
 
-# api route that change the state of a task
-@app.route('/task/<task_id>/set-state/<state>')
-def set_task_state(task_id, state):
-    # connect to "data.db" database with sqlite
+    return jsonify({"validated": True, "message": "User authentified", "data": {
+        "user": {
+            "user_id": user.user_id,
+            "user_name": user.user_name,
+            "user_email": user.user_email,
+            "user_color": user.user_color
+        },
+        "session_token": token
+    }})
+
+
+@app.route('/auth/logout', methods=['POST'])
+def auth_logout():
+    session_token = request.json['session_token']
+
     conn = sqlite3.connect('data.db')
+
+    c = conn.cursor()
+
+    c.execute("DELETE FROM Session WHERE session_token = ?", (session_token,))
+
+    conn.close()
+
+    return jsonify({"validated": True, "message": "User logged out", "data": None})
+
+
+@app.route('/auth/signup', methods=['POST'])
+def auth_signup():
+    user_name = request.json['name']
+    user_email = request.json['email']
+    user_password = request.json['password']
+
+    conn = sqlite3.connect('data.db')
+
+    c = conn.cursor()
+
+    user = User.getUserByEmail(user_email, conn)
+
+    if user != None:
+        return jsonify({"validated": False, "message": "User already exists", "data": None})
+
+    user = User.createUser(user_name, user_email, user_password, conn)
+
+    [token, _] = Session.createSession(user.user_id, conn)
+
+    conn.close()
+
+    return jsonify({"validated": True, "message": "User authentified", "data": {
+        "user": {
+            "user_id": user.user_id,
+            "user_name": user.user_name,
+            "user_email": user.user_email,
+            "user_color": user.user_color
+        },
+        "session_token": token
+    }})
+
+
+@app.route('/tasks', methods=['DELETE'])
+def tasks_delete():
+    session_token = request.json['session_token']
+    task_id = request.json['task_id']
+
+    conn = sqlite3.connect('data.db')
+
+    [validated, message, user] = Session.verifyToken(session_token, conn)
+
+    if not validated:
+        return jsonify({"validated": False, "message": message, "data": None})
+
+    Task.removeTask(task_id, conn)
+
+    conn.close()
+
+    return jsonify({"validated": True, "message": "Task deleted", "data": None})
+
+
+@app.route('/lists', methods=['DELETE'])
+def lists_delete():
+    session_token = request.json['session_token']
+    list_id = request.json['list_id']
+
+    conn = sqlite3.connect('data.db')
+
+    [validated, message, user] = Session.verifyToken(session_token, conn)
+
+    if not validated:
+        return jsonify({"validated": False, "message": message, "data": None})
+
+    List.removeList(list_id, conn)
+
+    conn.close()
+
+    return jsonify({"validated": True, "message": "List deleted", "data": None})
+
+
+@app.route('/tasks/move', methods=['PUT'])
+def tasks_move():
+    session_token = request.json['session_token']
+    task_id = request.json['task_id']
+    list_id = request.json['list_id']
+
+    conn = sqlite3.connect('data.db')
+
+    [validated, message, user] = Session.verifyToken(session_token, conn)
+
+    if not validated:
+        return jsonify({"validated": False, "message": message, "data": None})
 
     task = Task.getTask(task_id, conn)
 
-    task.updateTaskState(state, conn)
+    task.updateTaskList(list_id, conn)
 
-    # close the connection
     conn.close()
 
-    # return the result
-    return "success"
+    return jsonify({"validated": True, "message": "Task moved", "data": None})
 
 
+@app.route('/tasks/assign', methods=['PUT'])
+def tasks_assign():
+    session_token = request.json['session_token']
+    task_id = request.json['task_id']
+    user_id = request.json['user_id']
 
-# api route that get all members of a team with their role and name
-@app.route('/team/<team_name>/members')
-def get_team_members(team_name):
-    # connect to "data.db" database with sqlite
     conn = sqlite3.connect('data.db')
 
-    # create a cursor object
-    c = conn.cursor()
+    [validated, message, user] = Session.verifyToken(session_token, conn)
 
-    # join the Member and User tables to get the user_name and member_role
-    c.execute("SELECT user_name, member_role FROM User JOIN Member ON User.user_id = Member.user_id WHERE team_id = (SELECT team_id FROM Team WHERE team_name = ?)", (team_name,))
+    if not validated:
+        return jsonify({"validated": False, "message": message, "data": None})
 
-    # fetch the result
-    data = c.fetchall()
+    task = Task.getTask(task_id, conn)
 
-    # close the connection
+    task.updateTaskUser(user_id, conn)
+
     conn.close()
 
-    # return the result
-    return str(data)
+    return jsonify({"validated": True, "message": "Task assigned", "data": None})
 
-@app.route('/debug/populate_db') # this is for debugging purposes only
-def populate_db():
-    # connect to "data.db" database with sqlite
+
+@app.route('/tasks/create', methods=['POST'])
+def tasks_create():
+    session_token = request.json['session_token']
+    list_id = request.json['list_id']
+    task_title = request.json['task_name']
+    user_id = request.json['user_id']
+
+    print(session_token, list_id, task_title, user_id)
+
     conn = sqlite3.connect('data.db')
 
-    # create a cursor object
+    [validated, message, user] = Session.verifyToken(session_token, conn)
 
-    c = conn.cursor()
+    if not validated:
+        return jsonify({"validated": False, "message": message, "data": None})
 
-    # clear the database
-    c.execute('DELETE FROM User')
-    
-    c.execute('DELETE FROM Team')
-    
-    c.execute('DELETE FROM Member')
-    
-    c.execute('DELETE FROM List')
-    
-    c.execute('DELETE FROM Task')
-    
-    c.execute('DELETE FROM Comment')
-    
-
-    c.execute('INSERT INTO User (user_name, user_email, user_password) VALUES("Kelliananas", "a@gmail.com", "Cznzijeyèé2Y28J82J")')
-    
-    c.execute('INSERT INTO User (user_name, user_email, user_password) VALUES("Kokoriko", "arobase@sfr.com", "gzydjbcat103836426GTRFEDEZCS")')
-    
-    c.execute('INSERT INTO User (user_name, user_email, user_password) VALUES("Ktzerfsd123", "rgzsfd@saintaubinlasalle.fr", "XX_UIT_123")')
-    
-    c.execute('INSERT INTO User (user_name, user_email, user_password) VALUES("UIO", "fsdfz@b.com", "fraise3214")')
-    
-    c.execute('INSERT INTO User (user_name, user_email, user_password) VALUES("45", "efsd@hotmail.com", "Canardboiteux")')
-    
-    c.execute('INSERT INTO Team (team_name) VALUES("Kelliananas")')
-    
-    c.execute('INSERT INTO Team (team_name) VALUES("GroupeA")')
-    
-
-    c.execute('INSERT INTO Member (user_id, team_id, member_role) VALUES(1, 1, "admistrator")')
-    
-    c.execute('INSERT INTO Member (user_id, team_id, member_role) VALUES(2, 1, "member")')
-    
-    c.execute('INSERT INTO Member (user_id, team_id, member_role) VALUES(3, 2, "member")')
-    
-    c.execute('INSERT INTO Member (user_id, team_id, member_role) VALUES(4, 1, "member")')
-    
-    c.execute('INSERT INTO Member (user_id, team_id, member_role) VALUES(5, 2, "administrator")')
-    
-
-    c.execute('INSERT INTO List (team_id, list_title) VALUES(1, "To do")')
-    
-    c.execute('INSERT INTO List (team_id, list_title) VALUES(1, "Done")')
-    
-    c.execute('INSERT INTO List (team_id, list_title) VALUES(1, "Abandonned")')
-    
-    c.execute('INSERT INTO List (team_id, list_title) VALUES(2, "To do")')
-    
-    c.execute('INSERT INTO List (team_id, list_title) VALUES(2, "Done")')
-    
-    c.execute('INSERT INTO List (team_id, list_title) VALUES(2, "Abandonned")')
-    
-
-    c.execute('INSERT INTO Task (list_id, user_id, task_title, task_state, task_created_at, task_starts_at, task_ends_at) VALUES(1, 1, "Faire la vaisselle", "To do", "16/11/2022", "04/12/2022", "29/12/2023")')
-    
-    c.execute('INSERT INTO Task (list_id, user_id, task_title, task_state, task_created_at, task_starts_at, task_ends_at) VALUES(2, 2, "Manger du pain", "Done", "12/12/2020", "12/12/2020", "29/12/2023")')
-    
-    c.execute('INSERT INTO Task (list_id, user_id, task_title, task_state, task_created_at, task_starts_at, task_ends_at) VALUES(6, 3, "Faire du sport", "Abandonned", "16/11/2022", "29/12/2023", "29/12/2023")')
-    
-
-    c.execute('INSERT INTO Comment (task_id, user_id, comment_created_at, comment_title, comment_body) VALUES(1, 2, "25/11/2022", "RAPPEL", "Commence la tache!")')
-    
-    c.execute('INSERT INTO Comment (task_id, user_id, comment_created_at, comment_title, comment_body) VALUES(2, 2, "25/11/2022", "FAIT", "On a fini cette tâche.")')
-    
-    c.execute('INSERT INTO Comment (task_id, user_id, comment_created_at, comment_title, comment_body) VALUES(3, 5, "12/09/2024", "ANNULATION TACHE", "On annule cet tache ")')
-    
-    conn.commit()
+    task = Task.createTask(list_id, user_id, task_title, conn)
 
     conn.close()
 
-    return "Database populated"
+    return jsonify({"validated": True, "message": "Task created", "data": {
+        "task_id": task.task_id,
+        "task_title": task.task_title,
+        "task_list_id": task.list_id,
+        "task_user_id": task.user_id
+    }})
+
+
+@app.route('/lists', methods=['POST'])
+def tasks_get():
+    session_token = request.json['session_token']
+
+    conn = sqlite3.connect('data.db')
+
+    [validated, message, user] = Session.verifyToken(session_token, conn)
+
+    if not validated:
+        return jsonify({"validated": False, "message": message, "data": None})
+
+    lists = List.getLists(conn)
+
+    for list in lists:
+        list.tasks = Task.getTasks(list.list_id, conn)
+        print(list.list_id)
+        print(list.list_title)
+        print([task.task_title for task in list.tasks])
+
+    conn.close()
+
+    return jsonify({
+        "validated": True,
+        "message": "Tasks fetched",
+        "data": {
+            "lists": [{
+                "list_id": list.list_id,
+                "list_title": list.list_title,
+                "tasks": [{
+                    "task_id": task.task_id,
+                    "task_title": task.task_title,
+                    "user_id": task.user_id,
+                    "user_name": task.user_name,
+                    "user_color": task.user_color,
+                } for task in list.tasks]
+            } for list in lists]
+        }
+    })
+
+
+@app.route('/lists/create', methods=['POST'])
+def lists_create():
+    session_token = request.json['session_token']
+    list_title = request.json['list_title']
+
+    conn = sqlite3.connect('data.db')
+
+    [validated, message, user] = Session.verifyToken(session_token, conn)
+
+    if not validated:
+        return jsonify({"validated": False, "message": message, "data": None})
+
+    list = List.createList(list_title, conn)
+
+    conn.close()
+
+    return jsonify({"validated": True, "message": "List created", "data": {
+        "list_id": list.list_id,
+        "list_title": list.list_title
+    }})
+
+
+@app.route('/users', methods=['POST'])
+def users_get():
+
+    session_token = request.json['session_token']
+
+    conn = sqlite3.connect('data.db')
+
+    [validated, message, user] = Session.verifyToken(session_token, conn)
+
+    if not validated:
+        return jsonify({"validated": False, "message": message, "data": None})
+
+    conn = sqlite3.connect('data.db')
+
+    users = User.getUsers(conn)
+
+    conn.close()
+
+    return jsonify({
+        "validated": True,
+        "message": "Users fetched",
+        "data": {
+            "users": [{
+                "user_id": user.user_id,
+                "user_name": user.user_name,
+                "user_email": user.user_email,
+                "user_color": user.user_color
+            } for user in users]
+        }
+    })
