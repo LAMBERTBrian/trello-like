@@ -10,7 +10,7 @@ import random
 
 # create a Flask app with cors enabled
 app = Flask(__name__)
-CORS(app, resources={r"/*": {"origins": "*"}})
+CORS(app)
 
 
 @app.route('/auth/validate', methods=['POST'])
