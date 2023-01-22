@@ -13,6 +13,7 @@ Pour cloner le répertoire, télécharger git bash, et effectuer la commande sui
 2. Installer les dépendences avec les commandes suivantes
    `pip install flask`
    `pip install flask_cors`
+   `pip install python-dotenv`
 3. Dans un terminal, aller dans le dossier de l'API.
    `cd backend/api`
 
